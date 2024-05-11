@@ -26,6 +26,10 @@ fn tokenize(input: []const u8) !ArrayList(Token) {
         // if it's a space, tab, or newline, break
         switch (c) {
             ' ', '\t', '\n' => {
+                if (quoteCount % 2 != 0) {
+                    try text_buffer.append(c);
+                    continue;
+                }
                 if (text_buffer.items.len == 1) {
                     if (isOperator(text_buffer.items[0])) {
                         try token_list.append(Token{
@@ -33,6 +37,10 @@ fn tokenize(input: []const u8) !ArrayList(Token) {
                             .value = text_buffer.items,
                         });
                     }
+                    try token_list.append(Token{
+                        .type = "IdentifierName",
+                        .value = text_buffer.items,
+                    });
                 }
                 // clear the text buffer
                 if (text_buffer.items.len > 1) {
@@ -68,13 +76,6 @@ fn tokenize(input: []const u8) !ArrayList(Token) {
 
                 _ = try text_buffer.toOwnedSlice();
                 text_buffer.clearAndFree();
-                try text_buffer.append(c);
-                try token_list.append(Token{
-                    .type = "Whitespace",
-                    .value = text_buffer.items,
-                });
-                _ = try text_buffer.toOwnedSlice();
-                text_buffer.clearAndFree();
 
                 continue;
             },
@@ -93,8 +94,13 @@ fn tokenize(input: []const u8) !ArrayList(Token) {
                         });
                         _ = try text_buffer.toOwnedSlice();
                         text_buffer.clearAndFree();
-                        continue;
                     }
+                    continue;
+                }
+
+                if (quoteCount % 2 != 0) {
+                    try text_buffer.append(c);
+                    continue;
                 }
                 if (isPunctuator) {
                     // check if there's text in the buffer
@@ -123,8 +129,6 @@ fn tokenize(input: []const u8) !ArrayList(Token) {
                     try text_buffer.append(c);
                     continue;
                 }
-
-                continue;
             },
         }
     }
@@ -140,20 +144,14 @@ test "tokenizes basic variable assignment" {
     const item = tokens.items;
     try std.testing.expect(std.mem.eql(u8, item[0].type, "IdentifierName"));
     try std.testing.expect(std.mem.eql(u8, item[0].value, "const"));
-    try std.testing.expect(std.mem.eql(u8, item[1].type, "Whitespace"));
-    try std.testing.expect(std.mem.eql(u8, item[1].value, " "));
-    try std.testing.expect(std.mem.eql(u8, item[2].type, "IdentifierName"));
-    try std.testing.expect(std.mem.eql(u8, item[2].value, "hello"));
-    try std.testing.expect(std.mem.eql(u8, item[3].type, "Whitespace"));
-    try std.testing.expect(std.mem.eql(u8, item[3].value, " "));
+    try std.testing.expect(std.mem.eql(u8, item[1].type, "IdentifierName"));
+    try std.testing.expect(std.mem.eql(u8, item[1].value, "hello"));
+    try std.testing.expect(std.mem.eql(u8, item[2].type, "Punctuator"));
+    try std.testing.expect(std.mem.eql(u8, item[2].value, "="));
+    try std.testing.expect(std.mem.eql(u8, item[3].type, "StringLiteral"));
+    try std.testing.expect(std.mem.eql(u8, item[3].value, "'world'"));
     try std.testing.expect(std.mem.eql(u8, item[4].type, "Punctuator"));
-    try std.testing.expect(std.mem.eql(u8, item[4].value, "="));
-    try std.testing.expect(std.mem.eql(u8, item[5].type, "Whitespace"));
-    try std.testing.expect(std.mem.eql(u8, item[5].value, " "));
-    try std.testing.expect(std.mem.eql(u8, item[6].type, "StringLiteral"));
-    try std.testing.expect(std.mem.eql(u8, item[6].value, "'world'"));
-    try std.testing.expect(std.mem.eql(u8, item[7].type, "Punctuator"));
-    try std.testing.expect(std.mem.eql(u8, item[7].value, ";"));
+    try std.testing.expect(std.mem.eql(u8, item[4].value, ";"));
 }
 
 test "tokenizes basic function" {
@@ -167,38 +165,47 @@ test "tokenizes basic function" {
     defer tokens.deinit();
 
     const item = tokens.items;
-    // try std.testing.expect(std.mem.eql(u8, item[0].type, "IdentifierName"));
-    // try std.testing.expect(std.mem.eql(u8, item[0].value, "function"));
-    // try std.testing.expect(std.mem.eql(u8, item[1].type, "Whitespace"));
-    // try std.testing.expect(std.mem.eql(u8, item[1].value, " "));
-    // try std.testing.expect(std.mem.eql(u8, item[2].type, "IdentifierName"));
-    // try std.testing.expect(std.mem.eql(u8, item[2].value, "test"));
-    // try std.testing.expect(std.mem.eql(u8, item[3].type, "Punctuator"));
-    // try std.testing.expect(std.mem.eql(u8, item[3].value, "("));
-    // try std.testing.expect(std.mem.eql(u8, item[4].type, "IdentifierName"));
-    // try std.testing.expect(std.mem.eql(u8, item[4].value, "a"));
-    // try std.testing.expect(std.mem.eql(u8, item[5].type, "Punctuator"));
-    // try std.testing.expect(std.mem.eql(u8, item[5].value, ","));
-    // try std.testing.expect(std.mem.eql(u8, item[6].type, "Whitespace"));
-    // try std.testing.expect(std.mem.eql(u8, item[6].value, " "));
-    // try std.testing.expect(std.mem.eql(u8, item[7].type, "IdentifierName"));
-    // try std.testing.expect(std.mem.eql(u8, item[7].value, "b"));
-    // try std.testing.expect(std.mem.eql(u8, item[8].type, "Punctuator"));
-    // try std.testing.expect(std.mem.eql(u8, item[8].value, ")"));
-    // try std.testing.expect(std.mem.eql(u8, item[9].type, "Whitespace"));
-    // try std.testing.expect(std.mem.eql(u8, item[9].value, " "));
-    // try std.testing.expect(std.mem.eql(u8, item[10].type, "Punctuator"));
-    // try std.testing.expect(std.mem.eql(u8, item[10].value, "{"));
-    // try std.testing.expect(std.mem.eql(u8, item[11].type, "Whitespace"));
-    // try std.testing.expect(std.mem.eql(u8, item[11].value, "\n"));
-    // try std.testing.expect(std.mem.eql(u8, item[12].type, "Whitespace"));
-    // try std.testing.expect(std.mem.eql(u8, item[12].value, "\t"));
-    // try std.testing.expect(std.mem.eql(u8, item[13].type, "IdentifierName"));
-    // try std.testing.expect(std.mem.eql(u8, item[13].value, "return"));
+    try std.testing.expect(std.mem.eql(u8, item[0].type, "IdentifierName"));
+    try std.testing.expect(std.mem.eql(u8, item[0].value, "function"));
+    try std.testing.expect(std.mem.eql(u8, item[1].type, "IdentifierName"));
+    try std.testing.expect(std.mem.eql(u8, item[1].value, "test"));
+    try std.testing.expect(std.mem.eql(u8, item[2].type, "Punctuator"));
+    try std.testing.expect(std.mem.eql(u8, item[2].value, "("));
+    try std.testing.expect(std.mem.eql(u8, item[3].type, "IdentifierName"));
+    try std.testing.expect(std.mem.eql(u8, item[3].value, "a"));
+    try std.testing.expect(std.mem.eql(u8, item[4].type, "Punctuator"));
+    try std.testing.expect(std.mem.eql(u8, item[4].value, ","));
+    try std.testing.expect(std.mem.eql(u8, item[5].type, "IdentifierName"));
+    try std.testing.expect(std.mem.eql(u8, item[5].value, "b"));
+    try std.testing.expect(std.mem.eql(u8, item[6].type, "Punctuator"));
+    try std.testing.expect(std.mem.eql(u8, item[6].value, ")"));
+    try std.testing.expect(std.mem.eql(u8, item[7].type, "Punctuator"));
+    try std.testing.expect(std.mem.eql(u8, item[7].value, "{"));
+    try std.testing.expect(std.mem.eql(u8, item[8].type, "IdentifierName"));
+    try std.testing.expect(std.mem.eql(u8, item[8].value, "return"));
+    try std.testing.expect(std.mem.eql(u8, item[9].type, "IdentifierName"));
+    try std.testing.expect(std.mem.eql(u8, item[9].value, "a"));
+    try std.testing.expect(std.mem.eql(u8, item[10].type, "Punctuator"));
+    try std.testing.expect(std.mem.eql(u8, item[10].value, "+"));
+    try std.testing.expect(std.mem.eql(u8, item[11].type, "IdentifierName"));
+    try std.testing.expect(std.mem.eql(u8, item[11].value, "b"));
+}
 
-    for (item) |token| {
-        std.debug.print("\n{s} \"{s}\"\n", .{ token.type, token.value });
-    }
+test "long string variable" {
+    const input = "const hello = 'This is a really long string!'";
+    const tokens = try tokenize(input);
+    defer tokens.deinit();
+
+    const item = tokens.items;
+
+    try std.testing.expect(std.mem.eql(u8, item[0].type, "IdentifierName"));
+    try std.testing.expect(std.mem.eql(u8, item[0].value, "const"));
+    try std.testing.expect(std.mem.eql(u8, item[1].type, "IdentifierName"));
+    try std.testing.expect(std.mem.eql(u8, item[1].value, "hello"));
+    try std.testing.expect(std.mem.eql(u8, item[2].type, "Punctuator"));
+    try std.testing.expect(std.mem.eql(u8, item[2].value, "="));
+    try std.testing.expect(std.mem.eql(u8, item[3].type, "StringLiteral"));
+    try std.testing.expect(std.mem.eql(u8, item[3].value, "'This is a really long string!'"));
 }
 
 const Token = struct {
