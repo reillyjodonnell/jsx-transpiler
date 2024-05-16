@@ -9,6 +9,34 @@ fn isSame(word1: []const u8, word2: []const u8) bool {
     return eql(u8, word1, word2);
 }
 
+pub const Token = struct {
+    type: []const u8,
+    value: []const u8,
+};
+
+pub const Tokenizer = struct {
+    buffer: [:0]const u8,
+    index: usize,
+
+    pub fn init(buffer: [:0]const u8) Tokenizer {
+        return Tokenizer{
+            .buffer = buffer,
+            .index = 0,
+        };
+    }
+
+    pub fn next(self: *Tokenizer) Token {
+        var result = Token{
+            .type = "eof",
+            .loc = .{
+                .start = self.index,
+                .end = undefined,
+            },
+        };
+        _ = result;
+    }
+};
+
 fn tokenize(input: []const u8) !ArrayList(Token) {
     const allocator = gpa.allocator();
     var token_list = ArrayList(Token).init(allocator);
@@ -60,11 +88,10 @@ fn tokenize(input: []const u8) !ArrayList(Token) {
                         .type = "IdentifierName",
                         .value = text_buffer.items,
                     });
-                }
 
-                // we can't assume we're done with the text buffer as spaces can chain together
-                // so we need to check if we're done with the text buffer by seeing if the types dont match
-                if (text_buffer.items.len > 1) {
+                    // we can't assume we're done with the text buffer as spaces can chain together
+                    // so we need to check if we're done with the text buffer by seeing if the types dont match
+
                     const last_character_in_buffer = text_buffer.items[text_buffer.items.len - 1];
 
                     if (last_character_in_buffer == ' ' or last_character_in_buffer == '\t' or last_character_in_buffer == '\n') {
@@ -208,10 +235,26 @@ test "long string variable" {
     try std.testing.expect(std.mem.eql(u8, item[3].value, "'This is a really long string!'"));
 }
 
-const Token = struct {
-    type: []const u8,
-    value: []const u8,
-};
+test "strict equality" {
+    const input = "const hello = 'world' === 'world'";
+    const tokens = try tokenize(input);
+    defer tokens.deinit();
+
+    const item = tokens.items;
+
+    try std.testing.expect(std.mem.eql(u8, item[0].type, "IdentifierName"));
+    try std.testing.expect(std.mem.eql(u8, item[0].value, "const"));
+    try std.testing.expect(std.mem.eql(u8, item[1].type, "IdentifierName"));
+    try std.testing.expect(std.mem.eql(u8, item[1].value, "hello"));
+    try std.testing.expect(std.mem.eql(u8, item[2].type, "Punctuator"));
+    try std.testing.expect(std.mem.eql(u8, item[2].value, "="));
+    try std.testing.expect(std.mem.eql(u8, item[3].type, "StringLiteral"));
+    try std.testing.expect(std.mem.eql(u8, item[3].value, "'world'"));
+    try std.testing.expect(std.mem.eql(u8, item[4].type, "Punctuator"));
+    try std.testing.expect(std.mem.eql(u8, item[4].value, "==="));
+    try std.testing.expect(std.mem.eql(u8, item[5].type, "StringLiteral"));
+    try std.testing.expect(std.mem.eql(u8, item[5].value, "'world'"));
+}
 
 fn isStringLiteral(word: []const u8) bool {
     // if it's enclosed in quotes it is a string literal
